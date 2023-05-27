@@ -1,0 +1,261 @@
+---
+title: "Predicting Asthma Rates in California"
+author: "Pranjal Srivastava"
+date: "5/8/2022"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  highlight: pygments
+  toc: yes
+  toc_float: yes
+---
+
+
+```{r}
+setwd("/Users/pranjalsrivastava/Desktop/Projects/Predicting Emergency Department Visits for Asthma")
+
+library(tidyr)
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(haven)
+library(nortest)
+library(leaps)
+library(faraway)
+
+
+```
+
+##Data Cleaning
+```{r}
+cal_envir1 <- read.csv("Clean_Cal_Environtmentdata.csv")
+#cal_envir1 <- cal_envir %>% dplyr::select(Pesticides, `Tox. Release`, `Pollution Burden Score`, PM2.5, Traffic, Ozone, Asthma) 
+summary(cal_envir1)
+cal_envir2 <- na.omit(cal_envir1)
+summary(cal_envir2)
+write.csv(cal_envir2, "Clean_Cal_Environtmentdata.csv")
+```
+
+##Univariate Analysis & Standard Deviation
+```{r}
+#Print observations
+nrow(cal_envir2)
+#Univariate
+summary(cal_envir2)
+#SD
+sd(cal_envir2$Pesticides)
+sd(cal_envir2$'Tox. Release')
+sd(cal_envir2$'Pollution Burden Score')
+sd(cal_envir2$PM2.5)
+sd(cal_envir2$Traffic)
+sd(cal_envir2$Ozone)
+sd(cal_envir2$Asthma)
+
+```
+
+##Exploratory Plots
+```{r}
+#Histograms
+par(mfrow = c(2,3))
+hist(cal_envir2$Ozone, main = "Ozone", xlab = "Daily maximum 8-hour Ozone concentration" , col = "skyblue")
+hist(cal_envir2$PM2.5, main = "PM 2.5" , xlab = "Annual mean PM 2.5 concentrations" , col = "skyblue")
+hist(cal_envir2$Pesticides, main = "Pesticides" , xlab = "Total pounds per square mile" , col = "skyblue")
+hist(cal_envir2$Traffic, main = "Traffic" , xlab = "Traffic density" , col = "skyblue")
+hist(cal_envir2$Pollution.Burden.Score, main = "Pollution Burden Score" , xlab = "Pollution burden score" , col = "skyblue")
+hist(cal_envir2$Tox..Release, main = "Toxic Release" , xlab = "Toxicity-weighted concentrations" , col = "skyblue")
+
+#Scatter plots
+y <- cal_envir2$Asthma
+par(mfrow= c(2,3))
+plot(cal_envir2$Ozone,y, 
+     xlab = "Ozone", ylab = "Asthma", 
+     main = "Ozone and Asthma", col = "blue")
+abline(lm(y ~ cal_envir2$Ozone, data = cal_envir2), col = "red")
+
+plot(cal_envir2$PM2.5,y, 
+     xlab = "PM2.5", ylab = "Asthma", 
+     main = "PM 2.5 and Asthma", col = "blue")
+abline(lm(y ~ cal_envir2$PM2.5, data = cal_envir2), col = "red")
+
+plot(cal_envir2$Pesticides,y, 
+     xlab = "Pesticides", ylab = "Asthma", 
+     main = "Pesticides and Asthma", col = "blue")
+abline(lm(y ~ cal_envir2$Pesticides, data = cal_envir2), col = "red")
+
+plot(cal_envir2$Traffic,y, 
+     xlab = "Traffic", ylab = "Asthma", 
+     main = "Traffic and Asthma", col = "blue")
+abline(lm(y ~ cal_envir2$Traffic, data = cal_envir2), col = "red")
+
+plot(cal_envir2$Pollution.Burden.Score, y, 
+     xlab = "Pollution Burden Score", ylab = "Asthma", 
+     main = "Pollution Burden Score and Asthma", col = "blue")
+abline(lm(y ~ cal_envir2$Pollution.Burden.Score, data = cal_envir2), col = "red")
+
+plot(cal_envir2$Tox..Release,y, 
+     xlab = "Toxic Release", ylab = "Asthma", 
+     main = "Toxic Release and Asthma", col = "blue")
+abline(lm(y ~ cal_envir2$Tox..Release, data = cal_envir2), col = "red")
+```
+
+##Fitting a Model
+```{r}
+#fitting a model
+model1 <- lm(Asthma ~ Ozone+PM2.5+Pesticides+Traffic+Pollution.Burden.Score+ Tox..Release, data = cal_envir2)
+summary(model1)
+```
+
+##Diagnostics
+```{r}
+#Residuals vs. fitted plots
+par (mfrow = c (1,1))
+plot(fitted(model1), residuals(model1), main = "Residuals vs. Fitted" , xlab = "Fitted", ylab = "Residuals" , col = "darkblue")
+abline (h=0, col = "red")
+
+#Quantile-Quantile plots with standardized residuals
+par (mfrow = c(1,2))
+qqnorm(rstandard(model1), main = "Q-Q Plot" , col = "blue")
+abline(0,1, col = "red")
+hist (rstandard(model1), main = "Standardized Residuals", xlab =
+"Standardized Residuals" , col = "blue")
+
+#Normality Shapiro-Wilk Test
+#shapiro.test(residuals(model1)) # data too large for Shapiro so using Anderson-Darling normality test
+
+# Anderson-Darling normality test
+ad.test(residuals(model1))
+
+# Interpretation for AD test: reject the hypothesis of normality when the p-value is less than or equal to 0.05
+
+# Outliers
+range(rstudent(model1))
+
+p <- 2 # one predictor + an intercept
+n <- nrow (cal_envir2)
+qt(1-.05 /(n*2),n-p-1)
+
+#correlation
+cal_envir_modified <- cal_envir2[,-1]
+cal_envir_corrmatrix <- cor(cal_envir2,cal_envir_modified)
+cal_envir_corrmatrix <- round(cal_envir_corrmatrix,2)
+cal_envir_corrmatrix
+
+#eigenvalues
+cal_envir_eigen <- model.matrix(model1)[,-1]
+e <- eigen(t(cal_envir_eigen) %*% cal_envir_eigen)
+examen_e <- sqrt(e$val[1] / e$val)
+sum(examen_e > 30)
+
+#variance inflation factors
+require(MASS)
+require(faraway)
+cal_envir_vif <- vif(model1)
+cal_envir_vif
+```
+
+##Modified model Box-Cox Method
+```{r}
+#boxcox
+a <- boxcox(model1, plotit = TRUE)
+
+#finding lambda
+a$x[which.max(a$y)]
+```
+
+##Making a new model (Model 2)
+```{r}
+#Model2 With y Transformed
+model2 <- lm(Asthma^(10/99) ~ Ozone + PM2.5 + Pesticides + Traffic + Pollution.Burden.Score + Tox..Release, data = cal_envir2)
+summary(model2)
+```
+
+##Model 2 Diagnostics
+```{r}
+#Residuals vs Fitted Plot 
+plot(fitted(model2), rstandard(model2),
+     xlab = "Fitted",
+     ylab = "Residuals", col = "darkblue" , main = "Residuals vs. Fitted")
+abline(h=0, col = "red")
+
+# Quantile-Quantile plots with standardized residuals
+par (mfrow = c (1,2)) 
+qqnorm(rstandard(model2),main = "Q-Q Plot", col = "blue")
+abline(0,1, col = "red")
+hist(rstandard(model2), main = "Standardized Residuals", xlab = "Standardized Residuals" , col = "blue")
+```
+
+##Cooks Distance to Remove Outliers
+```{r}
+#Cooks distance
+cal_envir2$cooked <- cooks.distance(model2)
+sample_size <- nrow(cal_envir2)
+cal_envir2$outlier <- ifelse((cal_envir2$cooked < 4/sample_size),"keep","delete")
+cal_new <- cal_envir2[!(cal_envir2$outlier=="delete"),]
+
+rname <- row.names(cal_envir2)
+
+
+halfnorm(cal_envir2$cooked,4,labs = rname, ylab = "Cook's Distance" , main = "Cook's Distance vs Half-Normal")
+```
+
+##Making a New Model (Model 3) with Outliers Removed
+```{r}
+#Model 3 with new data, outliers removed
+model3 <- lm(Asthma^(10/99) ~ Ozone + PM2.5 + Pesticides + Traffic + Pollution.Burden.Score + `Tox..Release`, data=cal_new)
+summary(model3)
+nrow(cal_new)
+```
+
+##Diagnostics for Model 3
+```{r}
+#Residuals vs Fitted Plot 
+plot(fitted(model3), rstandard(model3),
+     xlab = "Fitted",
+     ylab = "Residuals", col = "darkblue" , main = "Residuals vs. Fitted")
+abline(h=0, col = "red")
+
+# Quantile-Quantile plots with standardized residuals
+par (mfrow = c (1,2)) 
+qqnorm(rstandard(model3),main = "Q-Q Plot: Model 3", col = "blue")
+abline(0,1, col = "red")
+hist(rstandard(model3), main = "Standardized Residuals ", xlab = "Standardized Residuals" , col = "blue")
+```
+
+##Comparing Model1 and Model3
+```{r}
+#QQplot M1 vs M3
+par (mfrow = c (1,2)) 
+qqnorm(rstandard(model3),main = "Q-Q Plot: Model 3", col = "blue")
+abline(0,1, col = "red")
+qqnorm(rstandard(model1),main = "Q-Q Plot: Model 1", col = "blue")
+abline(0,1, col = "red")
+```
+
+##Model Selection Based on AIC
+```{r}
+#AIC
+
+b <- regsubsets(Asthma^(10/99) ~ Ozone + PM2.5 + Pesticides + Traffic + Pollution.Burden.Score + Tox..Release, data=cal_new)
+rs <- summary(b)
+rs$which
+rs$rss
+n <- nrow(cal_new)
+p <- 2:7
+AIC <- n*log(rs$rss / n) + 2 * p
+AIC
+plot(AIC ~ I(p - 1), ylab = "AIC", xlab = "Number of Predictors" , col = "blue")
+
+#Best model is model 4, with Ozone, Traffic, Pollution Burden Score, and Tox. Release as predictors
+```
+
+##Final Model (Model 4), removed predictors
+```{r}
+#Final Model
+model4 <- lm(Asthma^(10/99) ~ Ozone + Traffic + Pollution.Burden.Score + Tox..Release, data=cal_new)
+summary(model4)
+confint(model4)
+
+model4$coefficients^(99/10)
+
+```
+
